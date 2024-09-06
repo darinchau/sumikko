@@ -8,6 +8,7 @@ import os
 from datetime import datetime
 from dataclasses import dataclass
 import numba
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -119,11 +120,18 @@ class Emulator:
             save_screenshot(frame, "./screenshot")
         return frame
 
-    def tap(self, x: int | ImageReference, y: int | None = None):
-        """Tap the screen at the specified coordinates."""
+    def tap(self, x: int | ImageReference, y: int | None = None, randomize: bool = True):
+        """Tap the screen at the specified coordinates.
+
+        randomize: If True, randomize the tap location inside the reference image."""
         assert (isinstance(x, int) and isinstance(y, int)) or (isinstance(x, ImageReference) and y is None)
         if isinstance(x, ImageReference):
-            x, y = x.x_center, x.y_center
+            if randomize:
+                y = random.randrange(x.y_center - x.y_range, x.y_center + x.y_range)
+                x = random.randrange(x.x_center - x.x_range, x.x_center + x.x_range)
+            else:
+                y = x.y_center
+                x = x.x_center
         try:
             self._run_adb_command(["shell", "input", "tap", str(x), str(y)])
         except Exception as e:

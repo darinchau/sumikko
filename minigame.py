@@ -6,6 +6,9 @@ from contextlib import contextmanager
 from datetime import datetime
 from model import ImageClassifier
 from scipy.spatial.distance import squareform, pdist
+import logging
+
+logger = logging.getLogger(__name__)
 
 GRID_SIZE = (11, 6)
 
@@ -179,10 +182,15 @@ def _solve_grid(grid: NDArray[np.int64]) -> list[tuple[int, int, int, int]] | No
                     continue
                 paths = find_all_paths(grid, i, j)
                 for path in paths:
+                    if (path[0], path[1], i, j) in available_paths or (i, j, path[0], path[1]) in available_paths:
+                        continue
                     available_paths.append((i, j, path[0], path[1]))
 
     if not available_paths:
         return None
+
+    available_paths = sorted(available_paths, key=lambda x: (grid[x[0], x[1]], (x[0], x[1])))
+    logging.debug(available_paths)
 
     sprites, counts = np.unique(grid, return_counts=True)
 
