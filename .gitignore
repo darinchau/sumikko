@@ -1,0 +1,7 @@
+.venv
+__pycache__
+emulator
+screenshot
+.vscode
+references/sprites/unknown
+references/sprites/raw
