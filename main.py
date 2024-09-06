@@ -3,9 +3,10 @@ from emulator import Emulator, ImageReference, save_screenshot
 import numpy as np
 from numpy.typing import NDArray
 import logging
-from minigame import *
+from minigame import detect_grid, get_grid_reference, show_grid, solve_grid, InvalidGrid
 import time
 import random
+from model import ImageClassifier
 
 def setup_logger():
     logger = logging.getLogger(__name__)
@@ -44,6 +45,12 @@ class SummikoEmulator(Emulator):
             raise RuntimeError("Screen size is not 1600x900")
         return ImageReference(792, 100, 99, 20, "references/minigame_screen_reference.png")
 
+    @property
+    def image_classifier(self):
+        if not hasattr(self, "_image_classifier"):
+            self._image_classifier = ImageClassifier("references/sprites/raw")
+        return self._image_classifier
+
     def _get_current_cross_button(self):
         return self.find_reference("references/cross-button.png")
 
@@ -79,13 +86,13 @@ class SummikoEmulator(Emulator):
 
     def solve_minigame(self, add_random_time_delay: bool = True):
         logger.debug("Solving minigame")
-        grid = detect_grid(self.screencap())
+        try:
+            grid = detect_grid(self.screencap(), self.image_classifier)
+        except InvalidGrid as e:
+            logger.error(f"Invalid grid: {e}")
+            return False
         logger.debug("Detected grid")
         logger.debug(show_grid(grid))
-
-        if not is_valid_grid(grid):
-            logger.error("Invalid grid")
-            return False
 
         solution = solve_grid(grid)
         if solution is None:
@@ -100,16 +107,16 @@ class SummikoEmulator(Emulator):
             for p0, p1, p2, p3 in solution:
                 if add_random_time_delay:
                     time.sleep(random.random() * 0.5)
-                self.tap(get_grid_reference(p0, p1))
+                self.tap(get_grid_reference(p0, p1, 20))
                 if add_random_time_delay:
                     time.sleep(random.random() * 0.5)
-                self.tap(get_grid_reference(p2, p3))
+                self.tap(get_grid_reference(p2, p3, 20))
         logger.info("Solved minigame")
         return True
 
 def main():
     em = SummikoEmulator("localhost:21503")
-    take_grid_screenshot(em.screencap())
+    em.solve_minigame()
 
 if __name__ == "__main__":
     main()

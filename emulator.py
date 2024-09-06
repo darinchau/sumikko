@@ -168,6 +168,8 @@ def save_screenshot(array: Image, screenshot_dir: str = "./screenshot", image_na
 
     if image_name is None:
         image_name = f"screenshot_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+    else:
+        image_name = f"{image_name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     screenshot_path = os.path.join(screenshot_dir, f"{image_name}.png")
     mpimg.imsave(screenshot_path, array)
 
