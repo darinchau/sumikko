@@ -184,8 +184,28 @@ def _solve_grid(grid: NDArray[np.int64]) -> list[tuple[int, int, int, int]] | No
     if not available_paths:
         return None
 
+    sprites, counts = np.unique(grid, return_counts=True)
+
+    # Sanity Check
     for p0, p1, p2, p3 in available_paths:
         assert grid[p0, p1] == grid[p2, p3] and grid[p0, p1] > 0
+
+    # Shortcut the computation by removing sprites that only have one pair left
+    shortcut_paths = []
+    for p0, p1, p2, p3 in available_paths:
+        for i, c in enumerate(counts):
+            if c == 2 and sprites[i] == grid[p0, p1] == grid[p2, p3]:
+                grid[p0, p1] = grid[p2, p3] = 0
+                shortcut_paths.append((p0, p1, p2, p3))
+
+    if shortcut_paths:
+        solution = _solve_grid(grid)
+        if solution is not None:
+            return shortcut_paths + solution
+        return None
+
+    # Do backtracking normally
+    for p0, p1, p2, p3 in available_paths:
         orig_value = grid[p0, p1]
         grid[p0, p1] = grid[p2, p3] = 0
         solution = _solve_grid(grid)
