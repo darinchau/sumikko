@@ -33,7 +33,7 @@ def take_grid_screenshot(screenshot: Image, reference_path: str = "./references/
             grid_screenshot[i, j] = sprite
     return grid_screenshot
 
-def detect_grid(screenshot: Image, classifier: ImageClassifier):
+def detect_grid(screenshot: Image, classifier: ImageClassifier, same_sprite_threshold: float = 0.4):
     """Detect the grid from the screenshot. Returns a 11x6 grid. 0 is empty, >0 are the sprites, -1 is the box."""
     grid_screenshot = take_grid_screenshot(screenshot, radius = 55, save=False)
     # If all black or all white, then it's an invalid grid
@@ -50,31 +50,51 @@ def detect_grid(screenshot: Image, classifier: ImageClassifier):
     # Retake the screenshot and save the sprites
     grid_screenshot = take_grid_screenshot(screenshot, radius = 20, save=False).reshape(-1, 40 * 40 * 3)
     grid_euclidean_dist = squareform(pdist(grid_screenshot, metric="euclidean"))
-    sorted_distance_idx = np.argsort(grid_euclidean_dist, axis=1)[:, :4].reshape(GRID_SIZE + (4,))
-    sorted_distance_idx = np.sort(sorted_distance_idx, axis=2)
+    sorted_distance_idx = np.argsort(grid_euclidean_dist, axis=1)
+    sorted_distances = np.sort(grid_euclidean_dist, axis=1)
 
-    sprites_set = set()
+    # Group the sprites together by distance
+    # Strategy is to find all the sprites that are really close together, put them together somewhere,
+    # and then use a union-find algorithm to group them together
+    sprite_groupings = set()
     for i in range(GRID_SIZE[0]):
         for j in range(GRID_SIZE[1]):
-            # Skip this cell if it's a box or empty
-            if predictions[i, j] in (0, 1):
-                continue
-            sprites_set.add(tuple(sorted_distance_idx[i, j]))
-
-    sprite_idx_lookup = {}
-    for i, sp in enumerate(sprites_set):
-        for idx in sp:
-            # If there are duplicates, then it's an invalid grid
-            if idx in sprite_idx_lookup:
-                raise InvalidGrid(f"Duplicate sprite: {idx}")
-            sprite_idx_lookup[idx] = i + 1
-
-    for i in range(GRID_SIZE[0]):
-        for j in range(GRID_SIZE[1]):
-            if predictions[i, j] in (0, 1):
-                continue
             ref = i * GRID_SIZE[1] + j
-            grid[i, j] = sprite_idx_lookup[ref]
+            if predictions[i, j] in (0, 1):
+                continue
+
+            for k in range(1, 4):
+                if sorted_distances[ref, k] < same_sprite_threshold:
+                    a, b = ref, sorted_distance_idx[ref, k].item()
+                    if a == b:
+                        continue
+                    if a > b:
+                        a, b = b, a
+                    sprite_groupings.add((a, b))
+
+    # Union-find algorithm
+    sprite_idxs = {}
+    sprite_idx = 1
+    for g1, g2 in sprite_groupings:
+        if g1 not in sprite_idxs and g2 not in sprite_idxs:
+            sprite_idxs[g1] = sprite_idxs[g2] = sprite_idx
+            sprite_idx += 1
+        elif g1 in sprite_idxs and g2 not in sprite_idxs:
+            sprite_idxs[g2] = sprite_idxs[g1]
+        elif g2 in sprite_idxs and g1 not in sprite_idxs:
+            sprite_idxs[g1] = sprite_idxs[g2]
+        else:
+            a, b = sprite_idxs[g1], sprite_idxs[g2]
+            for i in sprite_idxs:
+                if sprite_idxs[i] == b:
+                    sprite_idxs[i] = a
+
+    # Make the grid by using the sprite groupings
+    for i in range(GRID_SIZE[0]):
+        for j in range(GRID_SIZE[1]):
+            ref = i * GRID_SIZE[1] + j
+            if predictions[i, j] == 2:
+                grid[i, j] = sprite_idxs[ref]
 
     # Sanity check section: check if the grid is valid
     nsprites = grid.max()

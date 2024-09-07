@@ -6,8 +6,9 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
 
 class ImageClassifier:
-    def __init__(self, ref_path: str):
+    def __init__(self, ref_path: str, save_predictions: bool = False):
         self.ref_path = ref_path
+        self.save_predictions = save_predictions
         self.x, self.y = load_images(ref_path)
         self.knn = KNeighborsClassifier(n_neighbors=3)
         self.knn.fit(self.x, self.y)
@@ -15,7 +16,7 @@ class ImageClassifier:
     def predict(self, image: Image):
         return self.knn.predict(image.reshape(image.shape[0], -1))
 
-    def predict_grid_screenshot(self, screenshot: np.ndarray, save: bool = False):
+    def predict_grid_screenshot(self, screenshot: np.ndarray):
         grid_dim = screenshot.shape[:2]
         screenshot = screenshot.reshape(-1, 110, 110, 3)
         predictions = self.predict(screenshot)
@@ -24,8 +25,8 @@ class ImageClassifier:
             for j in range(grid_dim[1]):
                 ref = predictions[i * grid_dim[1] + j]
                 ref_value = ("empty", "box", "sprite")[ref]
-                if save:
-                    save_screenshot(screenshot[i * grid_dim[1] + j], os.path.join(self.ref_path, "../predicted"), f"{ref_value}_{i}_{j}")
+                if self.save_predictions:
+                    save_screenshot(screenshot[i * grid_dim[1] + j], os.path.join(self.ref_path, f"../predicted/{ref_value}"), f"{i}_{j}")
                 prediction_grid[i, j] = ref
         return prediction_grid
 
