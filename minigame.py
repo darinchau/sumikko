@@ -72,6 +72,8 @@ def detect_grid(screenshot: Image, classifier: ImageClassifier, same_sprite_thre
                         a, b = b, a
                     sprite_groupings.add((a, b))
 
+    sprite_groupings = sorted(sprite_groupings)
+
     # Union-find algorithm
     sprite_idxs = {}
     sprite_idx = 1
@@ -111,7 +113,6 @@ def detect_grid(screenshot: Image, classifier: ImageClassifier, same_sprite_thre
     return grid
 
 def show_grid(grid: NDArray[np.int64]):
-    """Print the grid to the console."""
     assert grid.shape == GRID_SIZE
     s = "\n"
     for i in range(GRID_SIZE[1]):
@@ -119,12 +120,6 @@ def show_grid(grid: NDArray[np.int64]):
             s += str(grid[j, i]).ljust(3)
         s += "\n"
     return s
-
-@contextmanager
-def lock_grid(grid: NDArray[np.int64]):
-    grid.flags.writeable = False
-    yield grid
-    grid.flags.writeable = True
 
 # A recursive implementation of the backtracking algorithm to find all available paths
 # L means i -> i-1
@@ -136,7 +131,7 @@ def _find_all_paths(grid: np.ndarray, i: int, j: int, current_direction: str, nt
     assert current_direction in ("U", "D", "L", "R")
     if ntwists > 2:
         return
-    if (i, j) in visited and visited[(i, j)] <= ntwists:
+    if (i, j) in visited and visited[(i, j)] < ntwists:
         return
     visited[(i, j)] = ntwists
 
@@ -149,10 +144,10 @@ def _find_all_paths(grid: np.ndarray, i: int, j: int, current_direction: str, nt
     at_top_boundary = j == -1 and (0 <= i <= grid.shape[0])
     at_bottom_boundary = j == grid.shape[1] and (0 < i < grid.shape[0])
 
-    can_go_left = i == 0 or at_top_boundary or at_bottom_boundary or (i > 0 and 0 <= j < grid.shape[1])
-    can_go_right = i == grid.shape[0] - 1 or at_top_boundary or at_bottom_boundary or (i < grid.shape[0] - 1 and 0 <= j < grid.shape[1])
-    can_go_up = j == 0 or at_left_boundary or at_right_boundary or (j > 0 and 0 <= i < grid.shape[0])
-    can_go_down = j == grid.shape[1] - 1 or at_left_boundary or at_right_boundary or (j < grid.shape[1] - 1 and 0 <= i < grid.shape[0])
+    can_go_left = current_direction != "R" and i == 0 or at_top_boundary or at_bottom_boundary or (i > 0 and 0 <= j < grid.shape[1])
+    can_go_right = current_direction != "L" and i == grid.shape[0] - 1 or at_top_boundary or at_bottom_boundary or (i < grid.shape[0] - 1 and 0 <= j < grid.shape[1])
+    can_go_up = current_direction != "U" and j == 0 or at_left_boundary or at_right_boundary or (j > 0 and 0 <= i < grid.shape[0])
+    can_go_down = current_direction != "D" and j == grid.shape[1] - 1 or at_left_boundary or at_right_boundary or (j < grid.shape[1] - 1 and 0 <= i < grid.shape[0])
 
     if can_go_left:
         _find_all_paths(grid, i - 1, j, "L", ntwists if current_direction=="L" else ntwists+1, visited)
@@ -171,14 +166,16 @@ def find_all_paths(grid: np.ndarray, i: int, j: int):
     assert 0 <= i < grid.shape[0]
     assert 0 <= j < grid.shape[1]
     visited = {}
-    if i == 0 or (i > 0 and grid[i - 1, j] == 0):
+
+    if i == 0 or (i > 0 and grid[i - 1, j] >= 0):
         _find_all_paths(grid, i - 1, j, "L", 0, visited)
-    if i == grid.shape[0] - 1 or (i < grid.shape[0] - 1 and grid[i + 1, j] == 0):
+    if i == grid.shape[0] - 1 or (i < grid.shape[0] - 1 and grid[i + 1, j] >= 0):
         _find_all_paths(grid, i + 1, j, "R", 0, visited)
-    if j == 0 or (j > 0 and grid[i, j - 1] == 0):
+    if j == 0 or (j > 0 and grid[i, j - 1] >= 0):
         _find_all_paths(grid, i, j - 1, "U", 0, visited)
-    if j == grid.shape[1] - 1 or (j < grid.shape[1] - 1 and grid[i, j + 1] == 0):
+    if j == grid.shape[1] - 1 or (j < grid.shape[1] - 1 and grid[i, j + 1] >= 0):
         _find_all_paths(grid, i, j + 1, "D", 0, visited)
+
     paths = []
     for x in range(GRID_SIZE[0]):
         for y in range(GRID_SIZE[1]):
@@ -192,16 +189,15 @@ def _solve_grid(grid: NDArray[np.int64]) -> list[tuple[int, int, int, int]] | No
         return []
 
     available_paths: list[tuple[int, int, int, int]] = []
-    with lock_grid(grid):
-        for i in range(11):
-            for j in range(6):
-                if grid[i, j] <= 0:
+    for i in range(11):
+        for j in range(6):
+            if grid[i, j] <= 0:
+                continue
+            paths = find_all_paths(grid, i, j)
+            for path in paths:
+                if (path[0], path[1], i, j) in available_paths or (i, j, path[0], path[1]) in available_paths:
                     continue
-                paths = find_all_paths(grid, i, j)
-                for path in paths:
-                    if (path[0], path[1], i, j) in available_paths or (i, j, path[0], path[1]) in available_paths:
-                        continue
-                    available_paths.append((i, j, path[0], path[1]))
+                available_paths.append((i, j, path[0], path[1]))
 
     if not available_paths:
         return None
