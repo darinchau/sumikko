@@ -139,6 +139,7 @@ class SummikoEmulator(Emulator):
         except InvalidGrid as e:
             logger.error(f"Invalid grid: {e}")
             return False
+
         logger.debug("Detected grid")
         logger.debug(show_grid(grid))
 
@@ -157,13 +158,10 @@ class SummikoEmulator(Emulator):
                 self.tap(get_grid_reference(p2, p3, 20))
 
         time.sleep(2)
+
+        # Retry by recursively calling solve_minigame
         if self.has_reference(self._minigame_ingame_reference):
-            logger.error("Failed to solve minigame")
-            if self.has_reference(self._minigame_ingame_reference) and self.has_reference(self._minigame_ingame_cross_reference):
-                self.tap(self._minigame_ingame_cross_reference)
-                logger.info("Cross button pressed")
-                time.sleep(1)
-            return False
+            return self.solve_minigame()
 
         logger.info("Solved minigame")
         return True
@@ -192,8 +190,11 @@ def run(em: SummikoEmulator):
                 logger.info("Minigame solved")
                 time.sleep(1)
                 continue
-
-            logger.info("Failed to solve minigame")
+            else:
+                if em.has_reference(em._minigame_ingame_reference) and em.has_reference(em._minigame_ingame_cross_reference):
+                    em.tap(em._minigame_ingame_cross_reference)
+                    logger.info("Cross button pressed")
+                    time.sleep(1)
 
         if em.press_cross_button():
             logger.info("Game fixed")
