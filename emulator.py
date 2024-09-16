@@ -75,8 +75,11 @@ class Emulator:
         try:
             output = self._run_adb_command(["shell", "wm", "size"])
         except Exception as e:
-            logger.error(f"Error getting screen size: {str(e)}")
-            raise RuntimeError("Error getting screen size") from e
+            try:
+                output = self._run_adb_command(["disconnect"])
+            except Exception as e:
+                logger.error(f"Error getting screen size: {str(e)}")
+                raise RuntimeError("Error getting screen size") from e
 
         output = output.decode("utf-8").strip()
         size = output.split("Physical size: ")[1].split("\n")[0]
@@ -95,7 +98,7 @@ class Emulator:
             self._screen_size = self._get_screen_size()
         return self._screen_size
 
-    def screencap(self, save: bool = True):
+    def _screencap(self):
         """Take a screenshot of the device. The screenshot is returned as a numpy array with shape (height, width, 3)."""
         try:
             self._run_adb_command(["shell", "screencap", "/sdcard/screen.png"])
@@ -116,9 +119,35 @@ class Emulator:
         assert frame.shape[1] == self.screen_size[0]
         assert frame.shape[2] == 3
         logger.debug("Successfully took screenshot")
+        return frame
+
+    def screencap(self, max_retries: int = 5, save: bool = False):
+        """Take a screenshot of the device. The screenshot is returned as a numpy array with shape (height, width, 3)."""
+        frame = None
+        for _ in range(5):
+            frame = self._screencap()
+            is_all_black = np.average(frame) < 0.001
+            if is_all_black:
+                logger.warning("Retaking screenshot because it is all black")
+                time.sleep(1)
+                continue
+
+            is_all_white = np.average(frame) > 0.999
+            if is_all_white:
+                logger.warning("Retaking screenshot because it is all white")
+                time.sleep(1)
+                continue
+
+            break
+        else:
+            assert frame is not None
+            logger.error("Failed to take screenshot")
+            return frame # TODO: Handle this better
+
+        assert frame is not None
 
         if save:
-            save_screenshot(frame, "./screenshot")
+            save_screenshot(frame)
         return frame
 
     def tap(self, x: int | ImageReference, y: int | None = None, randomize_space: bool = True, randomize_time: bool = True):
