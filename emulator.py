@@ -124,7 +124,7 @@ class Emulator:
     def screencap(self, max_retries: int = 5, save: bool = False):
         """Take a screenshot of the device. The screenshot is returned as a numpy array with shape (height, width, 3)."""
         frame = None
-        for _ in range(5):
+        for _ in range(max_retries):
             frame = self._screencap()
             is_all_black = np.average(frame) < 0.001
             if is_all_black:
