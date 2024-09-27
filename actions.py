@@ -183,7 +183,7 @@ def _find_cross_button_reference(img: NDArray[np.float32], base_color: NDArray[n
                 if height * width > max_area:
                     max_area = height * width
                     max_left_bound = j - width + 1
-                    max_right_bound = j - 1
+                    max_right_bound = j
                     max_top_bound = i - height + 1
                     max_bottom_bound = i
             stack[stack_idx] = j

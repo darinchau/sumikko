@@ -121,7 +121,7 @@ class Emulator:
         logger.debug("Successfully took screenshot")
         return frame
 
-    def screencap(self, max_retries: int = 5, save: bool = False):
+    def screencap(self, max_retries: int = 999, save: bool = False):
         """Take a screenshot of the device. The screenshot is returned as a numpy array with shape (height, width, 3)."""
         frame = None
         for _ in range(max_retries):
@@ -132,7 +132,7 @@ class Emulator:
                 time.sleep(1)
                 continue
 
-            is_all_white = np.average(frame) > 0.999
+            is_all_white = np.average(frame) > 0.9 and np.var(frame) < 0.01
             if is_all_white:
                 logger.warning("Retaking screenshot because it is all white")
                 time.sleep(1)
@@ -141,8 +141,7 @@ class Emulator:
             break
         else:
             assert frame is not None
-            logger.error("Failed to take screenshot")
-            return frame # TODO: Handle this better
+            raise RuntimeError("Could not take a valid screenshot")
 
         assert frame is not None
 
