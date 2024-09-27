@@ -114,7 +114,7 @@ class PlayMinigameAction(Action):
     @property
     def image_classifier(self):
         if not hasattr(self, "_image_classifier"):
-            self._image_classifier = ImageClassifier("references/sprites/raw", save_predictions=True)
+            self._image_classifier = ImageClassifier("references/sprites/raw", save_predictions=False)
         return self._image_classifier
 
     def perform(self, emulator: Emulator) -> list[Action]:

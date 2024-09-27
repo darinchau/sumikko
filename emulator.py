@@ -132,9 +132,10 @@ class Emulator:
                 time.sleep(1)
                 continue
 
-            is_all_white = np.average(frame) > 0.9 and np.var(frame) < 0.01
-            if is_all_white:
-                logger.warning("Retaking screenshot because it is all white")
+            # Check if the screenshot values are all close to 1 or 0
+            is_all_black_and_white = np.all((frame < 0.01) | (frame > 0.99))
+            if is_all_black_and_white:
+                logger.warning("Retaking screenshot because it is all black and white")
                 time.sleep(1)
                 continue
 
