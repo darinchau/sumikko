@@ -35,6 +35,9 @@ def get_master_list_of_action() -> list[Action]:
         PlayMinigameAction(),
         MinigameQuitAction(),
         CrossButtonAction(),
+        FailedToReadDownloadDataAction(),
+        TitleScreenAction(),
+        WordButtonAction("Close"),
         WaitAction(3)
     ]
 

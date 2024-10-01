@@ -9,6 +9,9 @@ import time
 import numba
 from model import ImageClassifier
 from abc import ABC, abstractmethod
+import tempfile
+from contextlib import contextmanager
+import easyocr
 
 CROSS_BUTTON_DIST_THRESHOLD = 0.03
 
@@ -155,6 +158,113 @@ class PlayMinigameAction(Action):
     def condition(self, emulator: Emulator) -> bool:
         return emulator.has_reference(self.minigame_ingame_reference)
 
+class MinigameQuitAction(Action):
+    @property
+    def minigame_quit_reference(self):
+        return ImageReference(1000, 100, 600, 20, "references/minigame_quit_button.png")
+
+    def perform(self, emulator: Emulator) -> list[Action]:
+        if emulator.has_reference(self.minigame_quit_reference):
+            emulator.tap(self.minigame_quit_reference)
+            self.logger.debug("Quitted minigame")
+            return [WaitAction(1)]
+        return []
+
+    def condition(self, emulator: Emulator) -> bool:
+        return emulator.has_reference(self.minigame_quit_reference)
+
+class CrossButtonAction(Action):
+    @property
+    def cross_button_base_color(self) -> NDArray[np.float32]:
+        return np.array([255, 138, 132], dtype=np.float32) / 255
+
+    @property
+    def minigame_quit_reference(self):
+        return ImageReference(1000, 100, 600, 20, "references/minigame_quit_button.png")
+
+    def perform(self, emulator: Emulator) -> list[Action]:
+        img = emulator.screencap()
+        cross_button = find_cross_button_reference(img, self.cross_button_base_color)
+        if cross_button is None:
+            self.logger.debug("Cross button not found")
+            return []
+
+        emulator.tap(cross_button)
+        self.logger.info(f"Pressed cross button at {cross_button.x_center}, {cross_button.y_center}")
+        return [WaitAction(1)]
+
+    def condition(self, emulator: Emulator) -> bool:
+        img = emulator.screencap()
+        maybe_has_cross_button = np.count_nonzero(np.linalg.norm(img - self.cross_button_base_color, axis=-1) < CROSS_BUTTON_DIST_THRESHOLD) > 0
+        return maybe_has_cross_button
+
+class FailedToReadDownloadDataAction(Action):
+    @property
+    def download_data_reference(self):
+        return ImageReference(803, 200, 400, 10, "references/failed download.png")
+
+    @property
+    def download_data_ok_reference(self):
+        return ImageReference(800, 150, 570, 20, "references/failed download ok.png")
+
+    def perform(self, emulator: Emulator) -> list[Action]:
+        if emulator.has_reference(self.download_data_reference) and emulator.has_reference(self.download_data_ok_reference):
+            emulator.tap(self.download_data_ok_reference)
+            self.logger.info("Fixed failed download")
+            return [WaitAction(1)]
+        return []
+
+    def condition(self, emulator: Emulator) -> bool:
+        return emulator.has_reference(self.download_data_reference)
+
+class TitleScreenAction(Action):
+    @property
+    def title_screen_settings_reference(self):
+        return ImageReference(1480, 40, 815, 20, "references/title screen setting.png")
+
+    @property
+    def title_screen_reference(self):
+        return ImageReference(800, 300, 450, 200, "references/title_screen_clickable.png")
+
+    def perform(self, emulator: Emulator) -> list[Action]:
+        if emulator.has_reference(self.title_screen_settings_reference):
+            emulator.tap(self.title_screen_reference)
+            self.logger.info("Tapped title screen")
+            return [WaitAction(1)]
+        return []
+
+    def condition(self, emulator: Emulator) -> bool:
+        return emulator.has_reference(self.title_screen_settings_reference)
+
+class WordButtonAction(Action):
+    def __init__(self, word: str):
+        self.word = word
+
+    @contextmanager
+    def get_screenshot(self, emulator: Emulator):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = save_screenshot(emulator.screencap(), tmpdir)
+            yield path
+
+    def perform(self, emulator: Emulator) -> list[Action]:
+        with self.get_screenshot(emulator) as path:
+            word_boxes = find_word_in_image(path, self.word)
+        if len(word_boxes) > 0:
+            x1, y1, x2, y2 = word_boxes[0]
+            imgref = ImageReference((x1 + x2) // 2, x2 - x1 + 1, (y1 + y2) // 2, y2 - y1 + 1, "N/A")
+            emulator.tap(imgref)
+            self.logger.info(f"Pressed {self.word} button")
+            return [WaitAction(1)]
+        return []
+
+    def condition(self, emulator: Emulator) -> bool:
+        with self.get_screenshot(emulator) as path:
+            word_boxes = find_word_in_image(path, self.word)
+        return len(word_boxes) > 0
+
+    def __repr__(self):
+        return f"{self.word.title()}ButtonAction"
+
 @numba.jit(nopython=True)
 def _find_cross_button_reference(img: NDArray[np.float32], base_color: NDArray[np.float32]) -> NDArray[np.int64]:
     """Find the cross button reference. Returns a 4-tuple in the form of (left, right, top, bottom)."""
@@ -205,47 +315,23 @@ def _find_cross_button_reference(img: NDArray[np.float32], base_color: NDArray[n
     return np.array([max_left_bound, max_right_bound, max_top_bound, max_bottom_bound])
 
 def find_cross_button_reference(img: NDArray[np.float32], base_color: NDArray[np.float32]) -> ImageReference | None:
-    l, r, t, b = _find_cross_button_reference(img, base_color)
+    bounding_box = _find_cross_button_reference(img, base_color)
+    l, r, t, b = bounding_box
     if l == r == t == b == -1:
         return None
     return ImageReference((l + r) // 2, r - l + 1, (t + b) // 2, b - t + 1, "N/A")
 
-class MinigameQuitAction(Action):
-    @property
-    def minigame_quit_reference(self):
-        return ImageReference(1000, 100, 600, 20, "references/minigame_quit_button.png")
+def find_word_in_image(image_path, word):
+    reader = easyocr.Reader(['en'])
 
-    def perform(self, emulator: Emulator) -> list[Action]:
-        if emulator.has_reference(self.minigame_quit_reference):
-            emulator.tap(self.minigame_quit_reference)
-            self.logger.debug("Quitted minigame")
-            return [WaitAction(1)]
-        return []
+    results = reader.readtext(image_path, detail=1)
 
-    def condition(self, emulator: Emulator) -> bool:
-        return emulator.has_reference(self.minigame_quit_reference)
+    word_boxes = []
 
-class CrossButtonAction(Action):
-    @property
-    def cross_button_base_color(self) -> NDArray[np.float32]:
-        return np.array([255, 138, 132], dtype=np.float32) / 255
+    for (bbox, text, prob) in results:
+        if word.lower() == text.lower():
+            x1, y1 = int(bbox[0][0]), int(bbox[0][1])
+            x2, y2 = int(bbox[2][0]), int(bbox[2][1])
+            word_boxes.append((x1, y1, x2, y2))
 
-    @property
-    def minigame_quit_reference(self):
-        return ImageReference(1000, 100, 600, 20, "references/minigame_quit_button.png")
-
-    def perform(self, emulator: Emulator) -> list[Action]:
-        img = emulator.screencap()
-        cross_button = find_cross_button_reference(img, self.cross_button_base_color)
-        if cross_button is None:
-            self.logger.debug("Cross button not found")
-            return []
-
-        emulator.tap(cross_button)
-        self.logger.info(f"Pressed cross button at {cross_button.x_center}, {cross_button.y_center}")
-        return [WaitAction(1)]
-
-    def condition(self, emulator: Emulator) -> bool:
-        img = emulator.screencap()
-        maybe_has_cross_button = np.count_nonzero(np.linalg.norm(img - self.cross_button_base_color, axis=-1) < CROSS_BUTTON_DIST_THRESHOLD) > 0
-        return maybe_has_cross_button
+    return word_boxes

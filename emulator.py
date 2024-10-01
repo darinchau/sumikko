@@ -212,6 +212,7 @@ def save_screenshot(array: Image, screenshot_dir: str = "./screenshot", image_na
         image_name = f"{image_name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     screenshot_path = os.path.join(screenshot_dir, f"{image_name}.png")
     mpimg.imsave(screenshot_path, array)
+    return screenshot_path
 
 def compare_image(image1: Image, reference: str | Image) -> float:
     """Compare two images and return the difference."""
