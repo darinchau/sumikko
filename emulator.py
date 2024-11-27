@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 Image = NDArray[np.float32]
 
+DEFAULT_DIFF_THRESHOLD = 0.02
+
 @dataclass(frozen=True)
 class ImageReference:
     """Defines an image reference."""
@@ -178,7 +180,7 @@ class Emulator:
         reference = ref.extract(screenshot)
         mpimg.imsave(ref.reference_path, reference)
 
-    def has_reference(self, ref: ImageReference, screenshot: Image | None = None, diff_threshold: float = 0.01) -> bool:
+    def has_reference(self, ref: ImageReference, screenshot: Image | None = None, diff_threshold: float = DEFAULT_DIFF_THRESHOLD) -> bool:
         """Check if the screen has a reference image."""
         logger.debug(f"Checking reference: {ref}")
         if not ref.available:
@@ -187,9 +189,9 @@ class Emulator:
         screenshot = screenshot if screenshot is not None else self.screencap()
         screenshot = ref.extract(screenshot)
         reference = self.read_image(ref.reference_path)
-        return compare_image(screenshot, reference)  < diff_threshold
+        return compare_image(screenshot, reference) < diff_threshold
 
-    def find_reference(self, ref_path: str, screenshot: Image | None = None, diff_threshold: float = 0.01) -> ImageReference | None:
+    def find_reference(self, ref_path: str, screenshot: Image | None = None, diff_threshold: float = DEFAULT_DIFF_THRESHOLD) -> ImageReference | None:
         ref = self.read_image(ref_path)
         screenshot = screenshot if screenshot is not None else self.screencap()
         pixels = find_reference(ref, screenshot, diff_threshold)
@@ -228,7 +230,7 @@ def compare_image(image1: Image, reference: str | Image) -> float:
     return diff
 
 @numba.jit(nopython=True)
-def find_reference(ref: Image, image: Image, diff_threshold: float = 0.01):
+def find_reference(ref: Image, image: Image, diff_threshold: float = DEFAULT_DIFF_THRESHOLD):
     """Find a reference image on the screen."""
     npixels = ref.size
     for i in range(image.shape[0] - ref.shape[0]):
