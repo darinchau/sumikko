@@ -75,13 +75,10 @@ class Emulator:
     def _get_screen_size(self):
         """Get the screen size of the device."""
         try:
-            output = self._run_adb_command(["shell", "wm", "size"])
+            output = self._run_adb_command(["-s", self.ip, "shell", "wm", "size"])
         except Exception as e:
-            try:
-                output = self._run_adb_command(["disconnect"])
-            except Exception as e:
-                logger.error(f"Error getting screen size: {str(e)}")
-                raise RuntimeError("Error getting screen size") from e
+            logger.error(f"Error getting screen size: {str(e)}")
+            raise RuntimeError("Error getting screen size") from e
 
         output = output.decode("utf-8").strip()
         size = output.split("Physical size: ")[1].split("\n")[0]
@@ -103,7 +100,7 @@ class Emulator:
     def _screencap(self):
         """Take a screenshot of the device. The screenshot is returned as a numpy array with shape (height, width, 3)."""
         try:
-            self._run_adb_command(["shell", "screencap", "/sdcard/screen.png"])
+            self._run_adb_command(["-s", self.ip, "shell", "screencap", "/sdcard/screen.png"])
 
         except Exception as e:
             logger.error(f"Error taking screenshot: {str(e)}")
@@ -111,7 +108,7 @@ class Emulator:
 
         with tempfile.NamedTemporaryFile(suffix=".png") as f:
             try:
-                self._run_adb_command(["pull", "/sdcard/screen.png", f.name])
+                self._run_adb_command(["-s", self.ip, "pull", "/sdcard/screen.png", f.name])
                 frame = self.read_image(f.name)
             except Exception as e:
                 logger.error(f"Error pulling screenshot: {str(e)}")
@@ -167,7 +164,7 @@ class Emulator:
         if randomize_time:
             time.sleep(random.random() * 0.5 + 0.1)
         try:
-            self._run_adb_command(["shell", "input", "tap", str(x), str(y)])
+            self._run_adb_command(["-s", self.ip, "shell", "input", "tap", str(x), str(y)])
         except Exception as e:
             logger.error(f"Error tapping screen: {str(e)}")
             raise RuntimeError("Error tapping screen") from e

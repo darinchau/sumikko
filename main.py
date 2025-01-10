@@ -37,7 +37,7 @@ def get_master_list_of_action() -> list[Action]:
         CrossButtonAction(),
         FailedToReadDownloadDataAction(),
         TitleScreenAction(),
-        WordButtonAction("Close"),
+        # WordButtonAction("Close"),
         WaitAction(3)
     ]
 
